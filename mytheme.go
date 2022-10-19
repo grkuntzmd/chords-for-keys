@@ -12,9 +12,6 @@ type myTheme struct{}
 var _ fyne.Theme = (*myTheme)(nil)
 
 func (*myTheme) Font(s fyne.TextStyle) fyne.Resource {
-	if s.Monospace || s.Bold || s.Italic {
-		return theme.DefaultTheme().Font(s)
-	}
 	return resourceNotoSansRegularMusicTtf
 }
 
