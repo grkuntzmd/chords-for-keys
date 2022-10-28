@@ -10,14 +10,14 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+const chromaticScaleLen = 12
+
 type (
 	scale struct {
 		name      string
 		intervals []int
 	}
-)
 
-type (
 	model struct {
 		key            string
 		scale          string
@@ -28,9 +28,11 @@ type (
 		keySelector   *widget.Select
 		scaleSelector *widget.Select
 
-		triadGrid        *fyne.Container
-		seventhGrid      *fyne.Container
-		secondaryDomGrid *fyne.Container
+		triadGrid         *fyne.Container
+		seventhGrid       *fyne.Container
+		secondaryDomGrid  *fyne.Container
+		secondaryLeadGrid *fyne.Container
+		tritoneSubGrid    *fyne.Container
 	}
 
 	chord struct {
@@ -41,7 +43,8 @@ type (
 )
 
 var (
-	chromatic = []string{"C", "C♯", "D♭", "D", "D♯", "E♭", "E", "F", "F♯", "G♭", "G", "G#", "A♭", "A", "A♯", "B♭", "B"}
+	keyNames       = []string{"C", "C♯", "D♭", "D", "D♯", "E♭", "E", "F", "F♯", "G♭", "G", "G#", "A♭", "A", "A♯", "B♭", "B"}
+	chromaticScale = []string{"C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"}
 
 	noteEquivalents = [][]string{
 		{"B♯", "C"},
@@ -60,6 +63,7 @@ var (
 
 	noteIndexes map[string]int
 
+	majorIntervals = []int{2, 2, 1, 2, 2, 2}
 	scaleNames     []string
 	scaleIntervals map[string][]int
 )
@@ -75,7 +79,7 @@ func init() {
 
 	// Make scale names array and intervals map.
 	scales := []scale{
-		{"Major", []int{2, 2, 1, 2, 2, 2}},
+		{"Major", majorIntervals},
 		{"Minor", []int{2, 1, 2, 2, 1, 2}},
 	}
 	scaleIntervals = make(map[string][]int)
@@ -89,7 +93,7 @@ func main() {
 	a := app.New()
 	a.Settings().SetTheme(&myTheme{})
 
-	key := chromatic[0]
+	key := keyNames[0]
 	scale := scaleNames[0]
 	m := model{
 		key:            key,
@@ -142,9 +146,11 @@ func (m *model) buildUI() *fyne.Container {
 
 	m.triadGrid = container.NewGridWithColumns(7)
 	m.seventhGrid = container.NewGridWithColumns(7)
-	m.secondaryDomGrid = container.NewGridWithColumns(7)
+	m.secondaryDomGrid = container.NewGridWithColumns(6)
+	m.secondaryLeadGrid = container.NewGridWithColumns(6)
+	m.tritoneSubGrid = container.NewGridWithColumns(1)
 
-	m.keySelector = widget.NewSelect(chromatic, func(s string) {
+	m.keySelector = widget.NewSelect(keyNames, func(s string) {
 		m.key = s
 		m.refreshUI()
 	})
@@ -176,6 +182,8 @@ func (m *model) buildUI() *fyne.Container {
 				widget.NewCard("", "Triads", m.triadGrid),
 				widget.NewCard("", "Sevenths", m.seventhGrid),
 				widget.NewCard("", "Secondary Dominants", m.secondaryDomGrid),
+				widget.NewCard("", "Secondary Lead Tones", m.secondaryLeadGrid),
+				widget.NewCard("", "Tritone Substitution", m.tritoneSubGrid),
 			),
 		),
 	)
@@ -188,6 +196,8 @@ func (m *model) refreshUI() {
 	fillChordGrid(m.buildTriads(), m.triadGrid)
 	fillChordGrid(m.buildSevenths(), m.seventhGrid)
 	fillChordGrid(m.buildSecondaryDoms(), m.secondaryDomGrid)
+	fillChordGrid(m.buildSecondaryLeads(), m.secondaryLeadGrid)
+	fillChordGrid(m.buildTritoneSubstition(), m.tritoneSubGrid)
 }
 
 func (m *model) buildChords(pattern []int, suffixes []string, positionNames []string) []chord {
@@ -213,9 +223,9 @@ func (m *model) buildTriads() []chord {
 	var suffixes []string
 	switch m.scale {
 	case "Major":
-		suffixes = []string{"", "m", "m", "", "", "m", "dim"}
+		suffixes = []string{"", "m", "m", "", "", "m", "°"}
 	case "Minor":
-		suffixes = []string{"m", "dim", "", "m", "m", "", ""}
+		suffixes = []string{"m", "°", "", "m", "m", "", ""}
 	}
 	positionNames := []string{"I", "II", "III", "IV", "V", "VI", "VII"}
 
@@ -238,10 +248,13 @@ func (m *model) buildSevenths() []chord {
 
 func (m *model) buildSecondaryDoms() []chord {
 	pattern := []int{0, 2, 4, 6}
-	positionNames := []string{"V⁷ / I", "V⁷ / II", "V⁷ / III", "V⁷ / IV", "V⁷ / V", "V⁷ / VI", "V⁷ / VII"}
+	positionNames := []string{"", "V⁷ / II", "V⁷ / III", "V⁷ / IV", "V⁷ / V", "V⁷ / VI", "V⁷ / VII"}
 	var chords []chord
 	for i, s := range m.scaleNotes {
-		sec := enumerateScale(s, m.scaleIntervals)
+		if i == 0 {
+			continue
+		}
+		sec := enumerateScale(s, majorIntervals)
 		fifth := sec[4]
 		secLen := len(sec)
 		c := chord{
@@ -256,4 +269,46 @@ func (m *model) buildSecondaryDoms() []chord {
 	}
 
 	return chords
+}
+
+func (m *model) buildSecondaryLeads() []chord {
+	pattern := []int{0, 2, 4}
+	positionNames := []string{"", "VII° / II", "VII° / III", "VII° / IV", "VII° / V", "VII° / VI", "VII° / VII"}
+	var chords []chord
+	for i, s := range m.scaleNotes {
+		if i == 0 {
+			continue
+		}
+		sec := enumerateScale(s, majorIntervals)
+		seventh := sec[6]
+		secLen := len(sec)
+		c := chord{
+			name:     seventh + "°",
+			position: positionNames[i],
+			notes:    []string{},
+		}
+		// fmt.Printf("note: %s, scale: %v, chord: %v\n", s, sec, c)
+		for _, p := range pattern {
+			c.notes = append(c.notes, sec[(p+6)%secLen])
+		}
+		chords = append(chords, c)
+	}
+
+	return chords
+}
+
+func (m *model) buildTritoneSubstition() []chord {
+	pattern := []int{0, 4, 7, 10}
+	index := noteIndexes[m.key] + 1
+	c := chord{
+		name:     chromaticScale[index%chromaticScaleLen] + "7",
+		position: "sub VII⁷ / V⁷",
+		notes:    []string{},
+	}
+
+	for _, p := range pattern {
+		c.notes = append(c.notes, chromaticScale[(index+p)%chromaticScaleLen])
+	}
+
+	return []chord{c}
 }

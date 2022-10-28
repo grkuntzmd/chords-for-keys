@@ -7,6 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestChromaticScale(t *testing.T) {
+	assert.Equal(t, 12, len(chromaticScale))
+}
+
 func TestNoteIndexes(t *testing.T) {
 	tests := []struct {
 		note  string
@@ -60,7 +64,7 @@ func TestEnumerateScaleMajor(t *testing.T) {
 		{"B♭", []string{"B♭", "C", "D", "E♭", "F", "G", "A"}},
 		{"B", []string{"B", "C♯", "D♯", "E", "F♯", "G♯", "A♯"}},
 	}
-	assert.Equal(t, len(chromatic), len(tests))
+	assert.Equal(t, len(keyNames), len(tests))
 
 	intervals := scaleIntervals["Major"]
 	for _, e := range tests {
@@ -94,7 +98,7 @@ func TestEnumerateScaleMinor(t *testing.T) {
 		{"B♭", []string{"B♭", "C", "D♭", "E♭", "F", "G♭", "A♭"}},
 		{"B", []string{"B", "C♯", "D", "E", "F♯", "G", "A"}},
 	}
-	assert.Equal(t, len(chromatic), len(tests))
+	assert.Equal(t, len(keyNames), len(tests))
 
 	intervals := scaleIntervals["Minor"]
 	for _, e := range tests {
