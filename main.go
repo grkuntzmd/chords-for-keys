@@ -10,26 +10,27 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-const (
-	sharp = "\u266f"
-	flat  = "\u266d"
-)
-
 type (
-	note struct {
-		name           string
-		accidental     string
-		includeInScale bool
-	}
-
 	scale struct {
 		name      string
 		intervals []int
 	}
+)
 
-	noteIndex struct {
-		note  note
-		index int
+type (
+	model struct {
+		key            string
+		scale          string
+		scaleNotes     []string
+		scaleIntervals []int
+
+		scaleLabel    *widget.Label
+		keySelector   *widget.Select
+		scaleSelector *widget.Select
+
+		triadGrid        *fyne.Container
+		seventhGrid      *fyne.Container
+		secondaryDomGrid *fyne.Container
 	}
 
 	chord struct {
@@ -37,63 +38,50 @@ type (
 		position string
 		notes    []string
 	}
-
-	model struct {
-		key        note
-		keyIndex   int
-		scale      scale
-		scaleNotes []string
-
-		keySelector   *widget.Select
-		scaleSelector *widget.Select
-		scaleLabel    *widget.Label
-
-		triadGrid   *fyne.Container
-		seventhGrid *fyne.Container
-	}
 )
 
 var (
-	allNotes [][]note = [][]note{
-		{{"B", sharp, false}, {"C", "", true}},
-		{{"C", sharp, true}, {"D", flat, true}},
-		{{"D", "", true}},
-		{{"D", sharp, true}, {"E", flat, true}},
-		{{"E", "", true}, {"F", flat, false}},
-		{{"E", sharp, false}, {"F", "", true}},
-		{{"F", sharp, true}, {"G", flat, true}},
-		{{"G", "", true}},
-		{{"G", sharp, true}, {"A", flat, true}},
-		{{"A", "", true}},
-		{{"A", sharp, true}, {"B", flat, true}},
-		{{"B", "", true}, {"C", flat, false}},
+	chromatic = []string{"C", "C♯", "D♭", "D", "D♯", "E♭", "E", "F", "F♯", "G♭", "G", "G#", "A♭", "A", "A♯", "B♭", "B"}
+
+	noteEquivalents = [][]string{
+		{"B♯", "C"},
+		{"C♯", "D♭"},
+		{"D"},
+		{"D♯", "E♭"},
+		{"E", "F♭"},
+		{"E♯", "F"},
+		{"F♯", "G♭"},
+		{"G"},
+		{"G♯", "A♭"},
+		{"A"},
+		{"A♯", "B♭"},
+		{"B", "C♭"},
 	}
 
-	allScales = []scale{
-		{"Major", []int{2, 2, 1, 2, 2, 2}},
-		{"Minor", []int{2, 1, 2, 2, 1, 2}},
-	}
+	noteIndexes map[string]int
 
-	keyNames       []string
-	keyNotes       = make(map[string]noteIndex)
 	scaleNames     []string
-	scaleIntervals = make(map[string]scale)
+	scaleIntervals map[string][]int
 )
 
 func init() {
-	for i, g := range allNotes {
-		for _, n := range g {
-			if n.includeInScale {
-				noteName := n.name + n.accidental
-				keyNames = append(keyNames, noteName)
-				keyNotes[noteName] = noteIndex{n, i}
-			}
+	// Make the noteIndexes map.
+	noteIndexes = make(map[string]int)
+	for i, r := range noteEquivalents {
+		for _, n := range r {
+			noteIndexes[n] = i
 		}
 	}
 
-	for _, s := range allScales {
+	// Make scale names array and intervals map.
+	scales := []scale{
+		{"Major", []int{2, 2, 1, 2, 2, 2}},
+		{"Minor", []int{2, 1, 2, 2, 1, 2}},
+	}
+	scaleIntervals = make(map[string][]int)
+	for _, s := range scales {
 		scaleNames = append(scaleNames, s.name)
-		scaleIntervals[s.name] = s
+		scaleIntervals[s.name] = s.intervals
 	}
 }
 
@@ -101,71 +89,75 @@ func main() {
 	a := app.New()
 	a.Settings().SetTheme(&myTheme{})
 
-	key := allNotes[0][0]
-	keyIndex := 0
-	scale := allScales[0]
+	key := chromatic[0]
+	scale := scaleNames[0]
 	m := model{
-		key:        key,
-		scale:      scale,
-		scaleNotes: enumerateScale(key.name, key.accidental, keyIndex, scale.intervals),
+		key:            key,
+		scale:          scale,
+		scaleNotes:     enumerateScale(key, scaleIntervals[scale]),
+		scaleIntervals: scaleIntervals[scale],
 	}
 
-	ui := buildUI(&m)
-
 	w := a.NewWindow("Chords for Keys")
-	w.SetContent(ui)
+	w.SetContent(m.buildUI())
 	w.ShowAndRun()
 }
 
-func enumerateScale(note, accidental string, index int, intervals []int) []string {
-	var scaleNotes []string
-	scaleNotes = append(scaleNotes, note+accidental)
+func enumerateScale(note string, intervals []int) []string {
+	var notes []string
+	notes = append(notes, note)
 
-	lastNote := note
-	ind := index
-	notesLength := len(allNotes)
+	lastNatural := note[0:1]
+	index := noteIndexes[note]
+	numNotes := len(noteEquivalents)
+
 	for _, interval := range intervals {
-		ind += interval
+		index += interval
+		currentNote := noteEquivalents[index%numNotes][0]
 
-		length := len(allNotes[index])
-		currentNote := allNotes[index][length-1]
-
-		for _, n := range allNotes[ind%notesLength] {
-			if n.name == lastNote {
+		for _, n := range noteEquivalents[index%numNotes] {
+			if n[0:1] == lastNatural {
 				continue
 			}
 			currentNote = n
 			break
 		}
-		lastNote = currentNote.name
-		scaleNotes = append(scaleNotes, currentNote.name+currentNote.accidental)
+		lastNatural = currentNote[0:1]
+		notes = append(notes, currentNote)
 	}
 
-	return scaleNotes
+	return notes
 }
 
-func buildUI(m *model) *fyne.Container {
+func fillChordGrid(chords []chord, grid *fyne.Container) {
+	grid.RemoveAll()
+	for _, c := range chords {
+		card := widget.NewCard(c.name, c.position, widget.NewLabel(strings.Join(c.notes, " ")))
+		grid.Add(card)
+	}
+}
+
+func (m *model) buildUI() *fyne.Container {
 	m.scaleLabel = widget.NewLabel(strings.Join(m.scaleNotes, " "))
 
 	m.triadGrid = container.NewGridWithColumns(7)
 	m.seventhGrid = container.NewGridWithColumns(7)
+	m.secondaryDomGrid = container.NewGridWithColumns(7)
 
-	m.keySelector = widget.NewSelect(keyNames, func(s string) {
-		k := keyNotes[s]
-		m.key = k.note
-		m.keyIndex = k.index
-		refreshUI(m)
+	m.keySelector = widget.NewSelect(chromatic, func(s string) {
+		m.key = s
+		m.refreshUI()
 	})
 	m.keySelector.SetSelectedIndex(0)
 
 	m.scaleSelector = widget.NewSelect(scaleNames, func(s string) {
-		m.scale = scaleIntervals[s]
-		refreshUI(m)
+		m.scale = s
+		m.scaleIntervals = scaleIntervals[s]
+		m.refreshUI()
 	})
 	m.scaleSelector.SetSelectedIndex(0)
 
-	fillChordGrid(buildTriads(m), m.triadGrid)
-	fillChordGrid(buildSevenths(m), m.seventhGrid)
+	m.refreshUI()
 
 	return container.NewPadded(
 		container.NewVBox(
@@ -183,12 +175,22 @@ func buildUI(m *model) *fyne.Container {
 			container.NewVBox(
 				widget.NewCard("", "Triads", m.triadGrid),
 				widget.NewCard("", "Sevenths", m.seventhGrid),
+				widget.NewCard("", "Secondary Dominants", m.secondaryDomGrid),
 			),
 		),
 	)
 }
 
-func buildChords(m *model, pattern []int, suffixes []string, positionNames []string) []chord {
+func (m *model) refreshUI() {
+	m.scaleNotes = enumerateScale(m.key, m.scaleIntervals)
+	m.scaleLabel.SetText(strings.Join(m.scaleNotes, " "))
+
+	fillChordGrid(m.buildTriads(), m.triadGrid)
+	fillChordGrid(m.buildSevenths(), m.seventhGrid)
+	fillChordGrid(m.buildSecondaryDoms(), m.secondaryDomGrid)
+}
+
+func (m *model) buildChords(pattern []int, suffixes []string, positionNames []string) []chord {
 	patLen := len(pattern)
 	var chords []chord
 	for i, n := range m.scaleNotes {
@@ -206,10 +208,10 @@ func buildChords(m *model, pattern []int, suffixes []string, positionNames []str
 	return chords
 }
 
-func buildTriads(m *model) []chord {
+func (m *model) buildTriads() []chord {
 	pattern := []int{0, 2, 4}
 	var suffixes []string
-	switch m.scale.name {
+	switch m.scale {
 	case "Major":
 		suffixes = []string{"", "m", "m", "", "", "m", "dim"}
 	case "Minor":
@@ -217,35 +219,41 @@ func buildTriads(m *model) []chord {
 	}
 	positionNames := []string{"I", "II", "III", "IV", "V", "VI", "VII"}
 
-	return buildChords(m, pattern, suffixes, positionNames)
+	return m.buildChords(pattern, suffixes, positionNames)
 }
 
-func buildSevenths(m *model) []chord {
+func (m *model) buildSevenths() []chord {
 	pattern := []int{0, 2, 4, 6}
 	var suffixes []string
-	switch m.scale.name {
+	switch m.scale {
 	case "Major":
-		suffixes = []string{"M7", "m7", "m7", "M7", "7", "m7", "m7\u266d5"}
+		suffixes = []string{"M7", "m7", "m7", "M7", "7", "m7", "m7♭5"}
 	case "Minor":
-		suffixes = []string{"m7", "m7\u266d5", "M7", "m7", "m7", "M7", "7"}
+		suffixes = []string{"m7", "m7♭5", "M7", "m7", "m7", "M7", "7"}
 	}
 	positionNames := []string{"I", "II", "III", "IV", "V", "VI", "VII"}
 
-	return buildChords(m, pattern, suffixes, positionNames)
+	return m.buildChords(pattern, suffixes, positionNames)
 }
 
-func refreshUI(m *model) {
-	m.scaleNotes = enumerateScale(m.key.name, m.key.accidental, m.keyIndex, m.scale.intervals)
-	m.scaleLabel.SetText(strings.Join(m.scaleNotes, " "))
-
-	fillChordGrid(buildTriads(m), m.triadGrid)
-	fillChordGrid(buildSevenths(m), m.seventhGrid)
-}
-
-func fillChordGrid(chords []chord, grid *fyne.Container) {
-	grid.RemoveAll()
-	for _, c := range chords {
-		card := widget.NewCard(c.name, c.position, widget.NewLabel(strings.Join(c.notes, " ")))
-		grid.Add(card)
+func (m *model) buildSecondaryDoms() []chord {
+	pattern := []int{0, 2, 4, 6}
+	positionNames := []string{"V⁷ / I", "V⁷ / II", "V⁷ / III", "V⁷ / IV", "V⁷ / V", "V⁷ / VI", "V⁷ / VII"}
+	var chords []chord
+	for i, s := range m.scaleNotes {
+		sec := enumerateScale(s, m.scaleIntervals)
+		fifth := sec[4]
+		secLen := len(sec)
+		c := chord{
+			name:     fifth + "7",
+			position: positionNames[i],
+			notes:    []string{},
+		}
+		for _, p := range pattern {
+			c.notes = append(c.notes, sec[(p+4)%secLen])
+		}
+		chords = append(chords, c)
 	}
+
+	return chords
 }
