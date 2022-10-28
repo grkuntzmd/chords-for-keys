@@ -241,7 +241,7 @@ func (m *model) buildSevenths() []chord {
 	case "Minor":
 		suffixes = []string{"m7", "m7♭5", "M7", "m7", "m7", "M7", "7"}
 	}
-	positionNames := []string{"I", "II", "III", "IV", "V", "VI", "VII"}
+	positionNames := []string{"I⁷", "II⁷", "III⁷", "IV⁷", "V⁷", "VI⁷", "VII⁷"}
 
 	return m.buildChords(pattern, suffixes, positionNames)
 }
