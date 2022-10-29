@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -102,7 +103,7 @@ func main() {
 		scaleIntervals: scaleIntervals[scale],
 	}
 
-	w := a.NewWindow("Chords for Keys")
+	w := a.NewWindow(fmt.Sprintf("Chords for Keys - v%s", fyne.CurrentApp().Metadata().Version))
 	w.SetContent(m.buildUI())
 	w.ShowAndRun()
 }
